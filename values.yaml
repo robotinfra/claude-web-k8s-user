@@ -1,0 +1,49 @@
+# Default values for claude-web-k8s-user
+# This chart creates RBAC resources for a per-user namespace in Claude Web Kubernetes Engine
+
+# User identification
+userid: "user123"  # Unique user identifier (e.g., GitHub username, SSO subject)
+
+# Namespace settings
+namespace:
+  name: ""  # If empty, defaults to "claude-{userid}"
+  create: true  # Create namespace if it doesn't exist
+
+# RBAC settings
+rbac:
+  # ClusterRole for cluster-wide access
+  createClusterRole: true
+
+  # Permissions granted to the user
+  permissions:
+    # Read access to most resources
+    read:
+      - pods
+      - pods/log
+      - pods/exec
+      - pods/portforward
+      - deployments
+      - services
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - ingresses
+      - events
+
+    # Write access for instance management
+    write:
+      - pods
+      - deployments
+      - services
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - ingresses
+
+    # ArgoCD application management (full access)
+    argocdApplications: true
+
+    # Database management (CNPG)
+    databases:
+      create: true  # Allow creating databases via CNPG Database CR
+      namespace: "database"  # CNPG cluster namespace

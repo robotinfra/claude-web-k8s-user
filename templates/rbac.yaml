@@ -1,0 +1,185 @@
+{{/*
+Namespace
+*/}}
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "claude-web-k8s-user.namespace" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "claude-web-k8s-user.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    claude-user-namespace: "true"
+{{- end }}
+
+---
+{{/*
+ServiceAccount
+*/}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "claude-web-k8s-user.serviceAccountName" . }}
+  namespace: {{ include "claude-web-k8s-user.namespace" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "claude-web-k8s-user.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    claude-userid: {{ .Values.userid }}
+
+---
+{{/*
+ClusterRole for cluster-wide access
+*/}}
+{{- if .Values.rbac.createClusterRole }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "claude-web-k8s-user.clusterRoleName" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "claude-web-k8s-user.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    claude-userid: {{ .Values.userid }}
+rules:
+  # Read access to core resources
+  - apiGroups: [""]
+    resources: {{ .Values.rbac.permissions.read | toYaml | nindent 4 }}
+    verbs: ["get", "list", "watch"]
+
+  # Write access for instance management
+  - apiGroups: [""]
+    resources: {{ .Values.rbac.permissions.write | toYaml | nindent 4 }}
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Pod operations (logs, exec, portforward)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "logs", "exec", "portforward"]
+
+  # Read access to apps resources
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+
+  # Write access to apps resources
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Read access to networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+
+  # Write access to ingress
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ArgoCD Application management (full access)
+  {{- if .Values.rbac.permissions.argocdApplications }}
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications", "applicationsets", "appprojects"]
+    verbs: ["*"]
+  {{- end }}
+
+  # CNPG Database management (if enabled)
+  {{- if .Values.rbac.permissions.databases.create }}
+  - apiGroups: ["postgresql.cnpg.io"]
+    resources: ["databases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
+
+  # Batch jobs (for future use)
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Custom resources (for future extensions)
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+{{- end }}
+
+---
+{{/*
+ClusterRoleBinding to bind ClusterRole to ServiceAccount
+*/}}
+{{- if .Values.rbac.createClusterRole }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "claude-web-k8s-user.clusterRoleBindingName" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "claude-web-k8s-user.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    claude-userid: {{ .Values.userid }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "claude-web-k8s-user.serviceAccountName" . }}
+    namespace: {{ include "claude-web-k8s-user.namespace" . }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "claude-web-k8s-user.clusterRoleName" . }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+
+---
+{{/*
+Role for namespace-scoped permissions
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "claude-web-k8s-user.fullname" . }}-admin
+  namespace: {{ include "claude-web-k8s-user.namespace" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "claude-web-k8s-user.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+rules:
+  # Full access to resources in user's namespace
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+
+  # Full access to apps resources
+  - apiGroups: ["apps"]
+    resources: ["*"]
+    verbs: ["*"]
+
+  # Full access to networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["*"]
+
+  # Full access to batch resources
+  - apiGroups: ["batch"]
+    resources: ["*"]
+    verbs: ["*"]
+
+---
+{{/*
+RoleBinding to bind Role to ServiceAccount
+*/}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "claude-web-k8s-user.fullname" . }}-admin-binding
+  namespace: {{ include "claude-web-k8s-user.namespace" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "claude-web-k8s-user.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "claude-web-k8s-user.serviceAccountName" . }}
+    namespace: {{ include "claude-web-k8s-user.namespace" . }}
+roleRef:
+  kind: Role
+  name: {{ include "claude-web-k8s-user.fullname" . }}-admin
+  apiGroup: rbac.authorization.k8s.io
