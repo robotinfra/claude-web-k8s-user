@@ -162,6 +162,11 @@ rules:
     resources: ["*"]
     verbs: ["*"]
 
+  # Full access to RBAC resources (for managing per-instance RBAC)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
 ---
 {{/*
 RoleBinding to bind Role to ServiceAccount
